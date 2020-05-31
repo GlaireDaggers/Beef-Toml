@@ -286,7 +286,7 @@ namespace JetFistGames.Toml
 
 		public void SetString(StringView val)
 		{
-			ValueType = .Integer;
+			ValueType = .String;
 			Value.Set(val);
 		}
 

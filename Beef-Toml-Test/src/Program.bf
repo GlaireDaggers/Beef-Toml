@@ -67,6 +67,16 @@ hosts = [
 				delete doc;
 			}
 
+			var doc = new TomlTableNode();
+			doc.AddChild<TomlValueNode>("myKey").SetString("Hello, world!");
+			doc.AddChild<TomlArrayNode>("myArray").AddChild<TomlValueNode>().SetInt(100);
+
+			var docStr = scope String();
+			TomlSerializer.Write(doc, docStr);
+
+			Console.WriteLine(docStr);
+			delete doc;
+
 			Console.In.Read();
 		}
 	}
