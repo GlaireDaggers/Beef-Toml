@@ -1,0 +1,7 @@
+FileVersion = 1
+
+[Project]
+Name = "BeefToml"
+TargetType = "BeefLib"
+StartupObject = "BeefToml.Program"
+DefaultNamespace = "JetFistGames.Toml"
