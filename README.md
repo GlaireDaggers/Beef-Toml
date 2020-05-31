@@ -1,5 +1,5 @@
 # Beef-Toml
-A simple TOML serializer/deserializer for the [Beef programming language](www.beeflang.org)
+A simple TOML serializer/deserializer for the [Beef programming language](https://www.beeflang.org)
 
 ## Usage
 
