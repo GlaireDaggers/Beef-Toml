@@ -1,0 +1,5 @@
+FileVersion = 1
+Projects = {Beef-Toml-Test = {Path = "."}, BeefToml = {Path = "../lib"}}
+
+[Workspace]
+StartupProject = "Beef-Toml-Test"

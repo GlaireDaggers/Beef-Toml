@@ -1,0 +1,7 @@
+FileVersion = 1
+Dependencies = {corlib = "*", BeefToml = "*"}
+
+[Project]
+Name = "Beef-Toml-Test"
+StartupObject = "Beef_Toml_Test.Program"
+DefaultNamespace = "Beef_Toml_Test"
