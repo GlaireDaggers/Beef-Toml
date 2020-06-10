@@ -373,6 +373,8 @@ namespace JetFistGames.Toml.Internal
 						break;
 					}
 
+					Utils.Check!(Match(.KeyStart));
+
 					if (ParseKey() case .Err(let err))
 					{
 						delete containerNode;
@@ -422,7 +424,17 @@ namespace JetFistGames.Toml.Internal
 		/// Parse key = value
 		private Result<void, TomlError> ParseKey()
 		{
-			var key = Utils.Check!(Match(TokenType.Text)).Value;
+			Token key;
+
+			if( Check(.String) )
+			{
+				key = Next();
+			}
+			else
+			{
+				key = Utils.Check!(Match(TokenType.Text)).Value;
+			}
+
 			var value = Utils.Check!(ParseValueTop()).Value;
 
 			var target = Insert(_activeNode, key.Value, value);

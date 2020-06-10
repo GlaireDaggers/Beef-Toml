@@ -1,2 +1,9 @@
 Beef-Toml-Test/build/
+<<<<<<< HEAD
 Beef-Toml-Test/BeefSpace_User.toml
+=======
+Beef-Toml-Test/BeefSpace_User.toml
+lib/BeefSpace.toml
+lib/BeefSpace_User.toml
+lib/build/
+>>>>>>> aa9c337a3b1f006104a29c3fb10ed4fd1ca4efb6
