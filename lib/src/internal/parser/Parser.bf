@@ -210,8 +210,6 @@ namespace JetFistGames.Toml.Internal
 			{
 				return .Err("Value already defined at key path");
 			}
-
-			return .Err("");
 		}
 
 		private Result<T, String> GetOrCreate<T>(TomlTableNode start, StringView path, bool ignoreDup = true) where T : TomlNode
