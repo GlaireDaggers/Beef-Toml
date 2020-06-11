@@ -201,25 +201,14 @@ namespace JetFistGames.Toml.Internal
 		{
 			TomlTableNode curNode = start;
 
-			var sep = path.Split('.');
-			for (var child in sep)
+			var next = curNode.FindChild(path);
+			if (next == null)
 			{
-				var next = curNode.FindChild(child);
-				if (next == null)
-				{
-					if (sep.HasMore)
-					{
-						curNode = curNode.AddChild<TomlTableNode>(child);
-					}
-					else
-					{
-						return curNode.AddChild(child, value);
-					}
-				}
-				else
-				{
-					return .Err("Value already defined at key path");
-				}
+				return curNode.AddChild(path, value);
+			}
+			else
+			{
+				return .Err("Value already defined at key path");
 			}
 
 			return .Err("");
