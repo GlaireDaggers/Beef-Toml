@@ -15,7 +15,7 @@ namespace JetFistGames.Toml.Internal
 		private int _start;
 		private int _pos;
 		private int _line;
-		private int[3] _prevWidths;
+		private int[5] _prevWidths;
 		private int _nPrev;
 		private List<Token> _tokens = new List<Token>() ~ delete _;
 		private bool _atEOF;
@@ -78,10 +78,12 @@ namespace JetFistGames.Toml.Internal
 				_line++;
 			}
 
+			_prevWidths[4] = _prevWidths[3];
+			_prevWidths[3] = _prevWidths[2];
 			_prevWidths[2] = _prevWidths[1];
 			_prevWidths[1] = _prevWidths[0];
 
-			if (_nPrev < 3)
+			if (_nPrev < _prevWidths.Count)
 				_nPrev++;
 
 			let (char, len) = UTF8.Decode(&_input[_pos], _input.Length - _pos);
@@ -101,6 +103,7 @@ namespace JetFistGames.Toml.Internal
 		{
 			StringView value = StringView(_input, _start, _pos - _start);
 			_tokens.Add(Token(tokenType, _line, value));
+			_start = _pos;
 		}
 
 		private void Ignore()
@@ -140,6 +143,8 @@ namespace JetFistGames.Toml.Internal
 
 			_prevWidths[0] = _prevWidths[1];
 			_prevWidths[1] = _prevWidths[2];
+			_prevWidths[2] = _prevWidths[3];
+			_prevWidths[3] = _prevWidths[4];
 
 			_nPrev--;
 			_pos -= w;
@@ -245,9 +250,22 @@ namespace JetFistGames.Toml.Internal
 			let r = Next();
 			Utils.Check!(r);
 
-			if (IsBareKeyChar(r))
+			if(r == (.)'.')
+			{
+				Backup();
+				Emit(TokenType.Text);
+				Utils.Check!(Next());
+				return LexTableNameStart();
+			}
+			else if (IsBareKeyChar(r))
 			{
 				return LexBareTableName();
+			}
+			else if(IsWhitespace(r))
+			{
+				Backup();
+				Emit(.Text);
+				return LexTableNameEnd();
 			}
 
 			Backup();
@@ -265,12 +283,17 @@ namespace JetFistGames.Toml.Internal
 			{
 				return LexTableNameEnd();
 			}
+			else if(r == (.)'.')
+			{
+				Utils.Check!(LexSkip());
+				return LexTableNameStart();
+			}
 			else if (r == (.)']')
 			{
 				return Pop();
 			}
 
-			return .Err(TomlError(_line, "Expected '.' or ']' to end table name, but got {0} instead", r.Value));
+			return .Err(TomlError(_line, "Expected ']' to end table name, but got {0} instead", r.Value));
 		}
 
 		private failable<void> LexKeyStart()
@@ -282,7 +305,7 @@ namespace JetFistGames.Toml.Internal
 			}
 			else if (IsWhitespace(r) || IsNL(r))
 			{
-				Next();
+				Utils.Check!(Next());
 				Utils.Check!(LexSkip());
 				return LexKeyStart();
 			}
@@ -308,6 +331,11 @@ namespace JetFistGames.Toml.Internal
 				Utils.Check!(LexSkip());
 				return LexValue();
 			}
+			else if(r == (.)'.')
+			{
+				Utils.Check!(LexSkip());
+				return LexKeyStart();
+			}
 			else if (IsWhitespace(r))
 			{
 				Utils.Check!(LexSkip());
@@ -321,7 +349,14 @@ namespace JetFistGames.Toml.Internal
 		{
 			let r = Utils.Check!(Next());
 
-			if (IsBareKeyChar(r))
+			if( r == (.)'.' )
+			{
+				Backup();
+				Emit(TokenType.Text);
+				Utils.Check!(Next());
+				return LexKeyStart();
+			}
+			else if (IsBareKeyChar(r))
 			{
 				return LexBareKey();
 			}
@@ -592,6 +627,11 @@ namespace JetFistGames.Toml.Internal
 				{
 					if (Utils.Check!(Accept('"')))
 					{
+						// why are "ending a multiline string with four or five quotation marks" considered valid scenarios
+						// that's stupid and it sucks and I hate it and it's stupid.
+
+						if(Utils.Check!(Accept('"'))) Utils.Check!(Accept('"'));
+
 						Backup();
 						Backup();
 						Backup();
@@ -652,6 +692,8 @@ namespace JetFistGames.Toml.Internal
 				{
 					if (Utils.Check!(Accept('\'')))
 					{
+						if(Utils.Check!(Accept('\''))) Utils.Check!(Accept('\''));
+
 						Backup();
 						Backup();
 						Backup();
@@ -690,7 +732,7 @@ namespace JetFistGames.Toml.Internal
 		{
 			let r = Utils.Check!(Next());
 
-			switch (r)
+			switch (r.Value)
 			{
 			case 'b': fallthrough;
 			case 't': fallthrough;
@@ -737,6 +779,25 @@ namespace JetFistGames.Toml.Internal
 		private failable<void> LexNumberOrDateStart()
 		{
 			let r = Utils.Check!(Next());
+
+			// numbers starting with 0x, 0o, or 0b are actually hex, octal, or binary (respectively)
+			// note: these are not allowed to have preceding - or + according to the spec
+			if( r == (.)'0' )
+			{
+				if(Utils.Check!(Accept('x')))
+				{
+					return LexHex();
+				}
+				else if(Utils.Check!(Accept('o')))
+				{
+					return LexOct();
+				}
+				else if(Utils.Check!(Accept('b')))
+				{
+					return LexBin();
+				}
+			}
+
 			if (r.Value.IsNumber)
 			{
 				return LexNumberOrDate();
@@ -765,7 +826,7 @@ namespace JetFistGames.Toml.Internal
 			{
 				return LexNumberOrDate();
 			}
-			else if (r == (.)'-')
+			else if (r == (.)'-' || r == (.)':')
 			{
 				return LexDatetime();
 			}
@@ -812,10 +873,97 @@ namespace JetFistGames.Toml.Internal
 					Fail!("Unexpected '.'");
 				}
 
+				// inf?
+				if(r == (.)'i')
+				{
+					if( Utils.Check!(Accept('n')))
+					{
+						if(Utils.Check!(Accept('f')))
+						{
+							Emit(TokenType.Float);
+							return Pop();
+						}
+
+						Backup();
+					}
+				}
+
+				// nan?
+				if(r == (.)'n')
+				{
+					if( Utils.Check!(Accept('a')))
+					{
+						if(Utils.Check!(Accept('n')))
+						{
+							Emit(TokenType.Float);
+							return Pop();
+						}
+
+						Backup();
+					}
+				}
+
 				return .Err(TomlError(_line, "Expected digit but got {0}", r.Value));
 			}
 
 			return LexNumber();
+		}
+
+		private failable<void> LexHex()
+		{
+			let r = Utils.Check!(Next());
+
+			if (IsHex(r))
+			{
+				return LexHex();
+			}
+
+			if (r == (.)'_')
+			{
+				return LexHex();
+			}
+
+			Backup();
+			Emit(TokenType.Integer);
+			return Pop();
+		}
+
+		private failable<void> LexOct()
+		{
+			let r = Utils.Check!(Next());
+
+			if (IsOct(r))
+			{
+				return LexOct();
+			}
+
+			if (r == (.)'_')
+			{
+				return LexOct();
+			}
+
+			Backup();
+			Emit(TokenType.Integer);
+			return Pop();
+		}
+
+		private failable<void> LexBin()
+		{
+			let r = Utils.Check!(Next());
+
+			if (IsBinary(r))
+			{
+				return LexBin();
+			}
+
+			if (r == (.)'_')
+			{
+				return LexBin();
+			}
+
+			Backup();
+			Emit(TokenType.Integer);
+			return Pop();
 		}
 
 		private failable<void> LexNumber()
@@ -883,6 +1031,13 @@ namespace JetFistGames.Toml.Internal
 				return Pop();
 			}
 
+			// awful workaround. or maybe I should just rename LexBool?
+			if(s == "inf" || s == "nan")
+			{
+				Emit(TokenType.Float);
+				return Pop();
+			}
+
 			return .Err(TomlError(_line, "Expected value but found {0} instead", s));
 		}
 
@@ -928,7 +1083,7 @@ namespace JetFistGames.Toml.Internal
 
 			if (r == (.)'#')
 			{
-				Push(new => LexTop);
+				Push(new => LexTopEnd);
 				return LexCommentStart();
 			}
 			else if (IsWhitespace(r))
@@ -952,6 +1107,16 @@ namespace JetFistGames.Toml.Internal
 		private static bool IsHex(char32 r)
 		{
 			return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F');
+		}
+
+		private static bool IsOct(char32 r)
+		{
+			return (r >= '0' && r <= '7');
+		}
+
+		private static bool IsBinary(char32 r)
+		{
+			return r == '0' || r == '1';
 		}
 
 		private static bool IsBareKeyChar(char32 r)

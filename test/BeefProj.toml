@@ -1,0 +1,9 @@
+FileVersion = 1
+Dependencies = {corlib = "*", BeefToml = "*"}
+
+[Project]
+Name = "BeefToml-Tests"
+StartupObject = "Program"
+
+[Configs.Debug.Win64]
+BuildKind = "Test"

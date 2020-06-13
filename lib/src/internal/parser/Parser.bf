@@ -197,17 +197,18 @@ namespace JetFistGames.Toml.Internal
 			return _root.Find<T>(path);
 		}
 
-		private Result<void, String> Insert(TomlTableNode start, StringView path, TomlNode value)
+		private Result<void, String> Insert(TomlTableNode start, Span<StringView> path, TomlNode value)
 		{
 			TomlTableNode curNode = start;
 
-			var sep = path.Split('.');
-			for (var child in sep)
+			for (int i = 0; i < path.Length; i++)
 			{
+				let child = path[i];
+
 				var next = curNode.FindChild(child);
 				if (next == null)
 				{
-					if (sep.HasMore)
+					if (i < path.Length - 1)
 					{
 						curNode = curNode.AddChild<TomlTableNode>(child);
 					}
@@ -218,24 +219,34 @@ namespace JetFistGames.Toml.Internal
 				}
 				else
 				{
-					return .Err("Value already defined at key path");
+					if (i < path.Length - 1)
+					{
+						curNode = next as TomlTableNode;
+						if (curNode == null)
+							return .Err("Value at part of key path already defined as another type");
+					}
+					else
+					{
+						return .Err("Value at key path already defined");
+					}
 				}
 			}
 
 			return .Err("");
 		}
 
-		private Result<T, String> GetOrCreate<T>(TomlTableNode start, StringView path, bool ignoreDup = true) where T : TomlNode
+		private Result<T, String> GetOrCreate<T>(TomlTableNode start, List<StringView> path, bool ignoreDup = true) where T : TomlNode
 		{
 			TomlTableNode curNode = start;
 
-			var sep = path.Split('.');
-			for (var child in sep)
+			for (int i = 0; i < path.Count; i++)
 			{
+				let child = path[i];
+
 				var next = curNode.FindChild(child);
 				if (next == null)
 				{
-					if (sep.HasMore)
+					if (i < path.Count - 1)
 					{
 						curNode = curNode.AddChild<TomlTableNode>(child);
 					}
@@ -248,9 +259,18 @@ namespace JetFistGames.Toml.Internal
 				{
 					if (ignoreDup)
 					{
-						if (sep.HasMore)
+						if (i < path.Count - 1)
 						{
-							curNode = next as TomlTableNode;
+							if(next is TomlArrayNode)
+							{
+								let array = next as TomlArrayNode;
+								curNode = array[array.Count - 1] as TomlTableNode;
+							}
+							else
+							{
+								curNode = next as TomlTableNode;
+							}
+
 							if (curNode == null)
 								return .Err("Value at key path already defined as another type");
 						}
@@ -346,7 +366,7 @@ namespace JetFistGames.Toml.Internal
 			case .Float:
 				fallthrough;
 			case .Integer:
-				return new TomlValueNode(token.Kind, token.Value);
+				fallthrough;
 			case .String:
 				fallthrough;
 			case .MultilineString:
@@ -354,7 +374,7 @@ namespace JetFistGames.Toml.Internal
 			case .RawString:
 				fallthrough;
 			case .RawMultilineString:
-				return new TomlValueNode(TokenType.String, token.Value);
+				return new TomlValueNode(token.Kind, token.Value);
 			default:
 				return .Err(TomlError(token.Line, "Unexpected token: {0}", token.Value));
 			}
@@ -424,20 +444,35 @@ namespace JetFistGames.Toml.Internal
 		/// Parse key = value
 		private Result<void, TomlError> ParseKey()
 		{
+			List<StringView> path = scope List<StringView>();
 			Token key;
 
-			if( Check(.String) )
+			// we could get a sequence of several keys here, in which case we interpret as key.key.key
+			repeat
 			{
-				key = Next();
-			}
-			else
-			{
-				key = Utils.Check!(Match(TokenType.Text)).Value;
-			}
+				if( Check(.String) || Check(.RawString) )
+				{
+					key = Next();
+				}
+				else
+				{
+					key = Utils.Check!(Match(TokenType.Text)).Value;
+				}
+
+				path.Add(key.Value);
+
+				if(Check(.KeyStart))
+				{
+					Next();
+					continue;
+				}
+
+				break;
+			} while (true);
 
 			var value = Utils.Check!(ParseValueTop()).Value;
 
-			var target = Insert(_activeNode, key.Value, value);
+			var target = Insert(_activeNode, path, value);
 
 			if (target case .Err(let err))
 			{
@@ -451,10 +486,32 @@ namespace JetFistGames.Toml.Internal
 		/// Parse [tableName]
 		private Result<void, TomlError> ParseTable()
 		{
-			var key = Utils.Check!(Match(TokenType.Text)).Value;
+			List<StringView> path = scope List<StringView>();
+			Token key;
+
+			// we could get a sequence of several keys here, in which case we interpret as key.key.key
+			repeat
+			{
+				if( Check(.String) || Check(.RawString) )
+				{
+					key = Next();
+				}
+				else
+				{
+					key = Utils.Check!(Match(TokenType.Text)).Value;
+				}
+
+				path.Add(key.Value);
+
+				if(Check(.TableEnd))
+				{
+					break;
+				}
+			} while (true);
+
 			Utils.Check!(Match(.TableEnd));
 
-			let node = GetOrCreate<TomlTableNode>(_root, key.Value);
+			let node = GetOrCreate<TomlTableNode>(_root, path);
 
 			if (node case .Err(let err))
 				return .Err(TomlError(key.Line, err));
@@ -466,10 +523,32 @@ namespace JetFistGames.Toml.Internal
 		/// Parse [[tableName]]
 		private Result<void, TomlError> ParseArrayTable()
 		{
-			var key = Utils.Check!(Match(TokenType.Text)).Value;
+			List<StringView> path = scope List<StringView>();
+			Token key;
+
+			// we could get a sequence of several keys here, in which case we interpret as key.key.key
+			repeat
+			{
+				if( Check(.String) || Check(.RawString) )
+				{
+					key = Next();
+				}
+				else
+				{
+					key = Utils.Check!(Match(TokenType.Text)).Value;
+				}
+
+				path.Add(key.Value);
+
+				if(Check(.ArrayTableEnd))
+				{
+					break;
+				}
+			} while (true);
+
 			Utils.Check!(Match(.ArrayTableEnd));
 
-			let targetArray = GetOrCreate<TomlArrayNode>(_root, key.Value);
+			let targetArray = GetOrCreate<TomlArrayNode>(_root, path);
 
 			if (targetArray case .Err(let err))
 				return .Err(TomlError(key.Line, err));

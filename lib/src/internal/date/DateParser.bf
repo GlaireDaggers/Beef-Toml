@@ -311,7 +311,10 @@ namespace JetFistGames.Toml.Internal
 			{
 				int year = 0, month = 0, day = 0, hour = 0, minute = 0, offsetH = 0;
 				float second = 0f, offsetM = 0f;
-				Scan(dateStr, "%d-%d-%d %d:%d:%f+%d:%f", &year, &month, &day, &hour, &minute, &second, &offsetH, &offsetM);
+				Scan(dateStr, "%d-%d-%d %d:%d:%f-%d:%f", &year, &month, &day, &hour, &minute, &second, &offsetH, &offsetM);
+
+				if( offsetH < 0 )
+					offsetH = -offsetH;
 
 				return DateTime.SpecifyKind( DateTime(year, month, day)
 					.AddHours(hour)

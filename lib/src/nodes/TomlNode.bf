@@ -111,17 +111,11 @@ namespace JetFistGames.Toml
 			return null;
 		}
 
-		public T Find<T>(StringView path) where T : TomlNode
+		public T Find<T>(StringView name) where T : TomlNode
 		{
-			TomlNode curNode = this;
-
-			var sep = path.Split('.');
-			for (var child in sep)
-			{
-				curNode = curNode.FindChild(child);
-				if (curNode == null)
-					return null;
-			}
+			TomlNode curNode = FindChild(name);
+			if (curNode == null)
+				return null;
 
 			return (T)curNode;
 		}
@@ -228,24 +222,68 @@ namespace JetFistGames.Toml
 		}
 
 		private TokenType ValueType;
-		private String Value = new String() ~ delete _;
+
+		private int _intValue = 0;
+		private double _floatValue = 0.0;
+		private bool _boolValue = false;
+		private DateTime _dtValue = DateTime.Now;
+		private String _stringValue = new String("") ~ delete _;
 
 		public this()
 		{
 			ValueType = .String;
-			Value.Set("");
 		}
 
 		public this(TokenType tokenType, StringView value)
 		{
 			ValueType = tokenType;
-			Value.Set(value);
 
-			// bad workaround for lexer passing through whitespace at end of datetime token
-			if(tokenType == .Datetime)
+			if(tokenType == .Integer)
 			{
-				Value.TrimStart();
-				Value.TrimEnd();
+				_intValue = Utils.ParseNumber(value).Value;
+			}
+			else if(tokenType == .Float)
+			{
+				_floatValue = Utils.ParseFloat(value).Value;
+			}
+			else if(tokenType == .String)
+			{
+				Utils.Unescape(value, _stringValue);
+			}
+			else if(tokenType == .RawString)
+			{
+				ValueType = .String;
+				_stringValue.Set(value);
+			}
+			else if(tokenType == .MultilineString)
+			{
+				ValueType = .String;
+
+				var v = value;
+				if(v[0] == '\n') v = StringView(v, 1);
+
+				Utils.UnescapeMultiline(v, _stringValue);
+			}
+			else if(tokenType == .RawMultilineString)
+			{
+				ValueType = .String;
+
+				var v = value;
+				if(v[0] == '\n') v = StringView(v, 1);
+
+				_stringValue.Set(v);
+			}
+			else if(tokenType == .Bool)
+			{
+				_boolValue = value == "true" ? true : false;
+			}
+			else if(tokenType == .Datetime)
+			{
+				// bad workaround for lexer passing through whitespace at end of datetime token
+				var v = value;
+				v..TrimStart()..TrimEnd();
+
+				_dtValue = DateParser.Parse(v);
 			}
 		}
 
@@ -254,45 +292,33 @@ namespace JetFistGames.Toml
 			return null;
 		}
 
-		public override Result<int> GetInt()
-		{
-			let val = int.Parse(Value);
-			if (val case .Err)
-				return .Err;
-
-			return val.Value;
-		}
-
 		public void SetInt(int val)
 		{
 			ValueType = .Integer;
-			Value.Clear();
-			val.ToString(Value);
+			_intValue = val;
 		}
 
-		public void SetFloat(float val)
+		public void SetFloat(double val)
 		{
-			ValueType = .Integer;
-			Value.Clear();
-			val.ToString(Value);
+			ValueType = .Float;
+			_floatValue = val;
 		}
 
 		public void SetBool(bool val)
 		{
-			ValueType = .Integer;
-			Value.Clear();
-			val.ToString(Value);
+			ValueType = .Bool;
+			_boolValue = val;
 		}
 
 		public void SetString(StringView val)
 		{
 			ValueType = .String;
-			Value.Set(val);
+			_stringValue.Set(val);
 		}
 
 		public void SetDatetime(DateTime val)
 		{
-			ValueType = .Integer;
+			/*ValueType = .Integer;
 			Value.Clear();
 			val.ToString(Value, "yyyy-MM-dd HH:mm:ss.FFF");
 
@@ -311,36 +337,40 @@ namespace JetFistGames.Toml
 				break;
 			case .Unspecified:
 				break;
-			}
+			}*/
+
+			ValueType = .Datetime;
+			_dtValue = val;
+		}
+
+		public override Result<int> GetInt()
+		{
+			if(ValueType != .Integer) return .Err;
+			return _intValue;
 		}
 
 		public override Result<double> GetFloat()
 		{
-			let val = double.Parse(Value);
-			if (val case .Err)
-				return .Err;
-
-			return val.Value;
+			if(ValueType != .Float) return .Err;
+			return _floatValue;
 		}
 
 		public override Result<bool> GetBool()
 		{
-			if (Value == "true")
-				return true;
-			else if (Value == "false")
-				return false;
-
-			return .Err;
+			if(ValueType != .Bool) return .Err;
+			return _boolValue;
 		}
 
 		public override Result<DateTime> GetDatetime()
 		{
-			return DateParser.Parse(Value);
+			if(ValueType != .Datetime) return .Err;
+			return _dtValue;
 		}
 
 		public override Result<String> GetString()
 		{
-			return Value;
+			if(ValueType != .String) return .Err;
+			return _stringValue;
 		}
 	}
 }
