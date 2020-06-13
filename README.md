@@ -17,11 +17,10 @@ A simple TOML serializer/deserializer for the [Beef programming language](https:
     }
     else if (result case .Ok(let doc))
     {
-        // query the TOML document tree nodes using dot notation
-       Console.WriteLine(doc["table.key"].GetString().Value);
+        Console.WriteLine(doc["table"]["key"].GetString().Value);
         
         // index array nodes
-        let tomlArray = doc["table.arrayKey"].GetArray().Value;
+        let tomlArray = doc["table"]["arrayKey"].GetArray().Value;
         for(int i = 0; i < tomlArray.Count; i++)
         {
           Console.WriteLine(tomlArray[i].GetInt().Value);
