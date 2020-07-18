@@ -22,6 +22,85 @@ namespace JetFistGames.Toml
 			}
 		}
 
+		public static Result<void, TomlError> Read<T>(StringView input, T dest) where T : class
+		{
+			let result = Read(input);
+
+			if (result case .Err(let err))
+				return .Err(err);
+
+			let doc = (TomlTableNode) result.Get();
+			var fields = dest.GetType().GetFields();
+
+			bool isContract = typeof(T).GetCustomAttribute<DataContractAttribute>() case .Ok;
+
+			for (let key in doc.Keys)
+			{
+				for (let field in fields)
+				{
+					StringView fieldName = field.Name;
+					if (fieldName.StartsWith("prop__"))
+						fieldName = StringView(field.Name, 6);
+
+					if (isContract && field.GetCustomAttribute<DataMemberAttribute>() case .Ok(let val))
+					{
+						if (val.Name != "")
+							fieldName = StringView(val.Name);
+					}	
+					else if (isContract || fieldName != key || field.GetCustomAttribute<NotDataMemberAttribute>() case .Ok)
+						continue;
+
+					if (IsMatchingType(doc[key].Kind, field.FieldType))
+					{
+						switch (doc[key].Kind)
+						{
+						case .String:
+							field.SetValue(dest, new String(doc[key].GetString().Get()));
+							break;
+						case .Int:
+							field.SetValue(dest, doc[key].GetInt().Get());
+							break;
+						case .Float:
+							field.SetValue(dest, doc[key].GetFloat().Get());
+							break;
+						case .Bool:
+							field.SetValue(dest, doc[key].GetBool().Get());
+							break;
+						case .Table:
+							field.SetValue(dest, (Dictionary<String, Object>) doc[key].GetTable().Get().ToObject());
+							break;
+						case .Array:
+							field.SetValue(dest, doc[key].GetString().Get());
+							break;
+						case .Datetime:
+							field.SetValue(dest, doc[key].GetString().Get());
+							break;
+						}
+					}
+				}
+
+				fields.Reset();
+			}
+
+			delete doc;
+
+			return .Ok;
+			
+			bool IsMatchingType(TomlValueType valueType, Type fieldType)
+			{
+				if ((valueType == .String   && fieldType == typeof(String))                     ||
+				    (valueType == .Int      && fieldType == typeof(int))                        ||
+				    (valueType == .Float    && fieldType == typeof(float))                      ||
+				    (valueType == .Bool     && fieldType == typeof(bool))                       ||
+				    (valueType == .Table    && fieldType == typeof(Dictionary<String, Object>)) ||
+				    (valueType == .Array    && fieldType == typeof(List<Object>))               ||
+				    (valueType == .Datetime && fieldType == typeof(DateTime)))
+						return true;
+
+				return false;
+			}
+		}
+
 		public static void Write(TomlTableNode root, String output)
 		{
 			output.Clear();
