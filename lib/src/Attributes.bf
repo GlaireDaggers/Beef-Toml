@@ -11,14 +11,14 @@ namespace JetFistGames.Toml
 	[AttributeUsage(.Field | .Property, .ReflectAttribute)]
 	public struct DataMemberAttribute : Attribute
 	{
-		public char8* Name;
+		public String Name;
 
 		public this()
 		{
 			Name = "";
 		}
 
-		public this(char8* Name)
+		public this(String Name)
 		{
 			this.Name = Name;
 		}
