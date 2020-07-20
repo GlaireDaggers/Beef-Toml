@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using JetFistGames.Toml.Internal;
+using System.IO;
 
 namespace JetFistGames.Toml
 {
@@ -22,6 +23,21 @@ namespace JetFistGames.Toml
 			}
 		}
 
+		public static Result<void, TomlError> ReadFile<T>(StringView path, T dest) where T : class
+		{
+			var file = scope String();
+			let fileReadResult = File.ReadAllText(path, file);
+
+			if (fileReadResult case .Err(let err))
+			{
+				var filename = scope String();
+				Path.GetFileName(path, filename);
+				return .Err(.(-1, "Could not read file '{}': {}", filename, err));
+			}
+
+			return Read(file, dest);
+		}
+
 		public static Result<void, TomlError> Read<T>(StringView input, T dest) where T : class
 		{
 			let result = Read(input);
@@ -30,19 +46,24 @@ namespace JetFistGames.Toml
 				return .Err(err);
 
 			let doc = (TomlTableNode) result.Get();
+			return Read(doc, dest);
+		}
+
+		public static Result<void, TomlError> Read<T>(TomlTableNode doc, T dest) where T : class
+		{
 			var fields = dest.GetType().GetFields();
 
 			bool isContract = typeof(T).GetCustomAttribute<DataContractAttribute>() case .Ok;
 
 			for (let key in doc.Keys)
 			{
-				for (let field in fields)
+				FieldLoop: for (let field in fields)
 				{
 					StringView fieldName = field.Name;
 					if (fieldName.StartsWith("prop__"))
 						fieldName = StringView(field.Name, 6);
 
-					if (isContract && field.GetCustomAttribute<DataMemberAttribute>() case .Ok(let val))
+					if (field.GetCustomAttribute<DataMemberAttribute>() case .Ok(let val))
 					{
 						if (val.Name != "")
 							fieldName = StringView(val.Name);
@@ -56,26 +77,34 @@ namespace JetFistGames.Toml
 						{
 						case .String:
 							field.SetValue(dest, new String(doc[key].GetString().Get()));
-							break;
+							break FieldLoop;
 						case .Int:
 							field.SetValue(dest, doc[key].GetInt().Get());
-							break;
+							break FieldLoop;
 						case .Float:
 							field.SetValue(dest, doc[key].GetFloat().Get());
-							break;
+							break FieldLoop;
 						case .Bool:
 							field.SetValue(dest, doc[key].GetBool().Get());
-							break;
+							break FieldLoop;
 						case .Table:
-							field.SetValue(dest, (Dictionary<String, Object>) doc[key].GetTable().Get().ToObject());
-							break;
+							field.SetValue(dest, doc[key].GetTable().Get().ToObject());
+							break FieldLoop;
 						case .Array:
 							field.SetValue(dest, doc[key].GetString().Get());
-							break;
+							break FieldLoop;
 						case .Datetime:
 							field.SetValue(dest, doc[key].GetString().Get());
-							break;
+							break FieldLoop;
 						}
+					}
+					else if (doc[key].Kind == .Table)
+					{
+						/*var value = field.GetValue(dest).Get();
+
+						let table = (TomlTableNode) doc[key];
+						Read(table, *(Object*)value.GetValueData());
+						field.SetValue(dest, value);*/
 					}
 				}
 

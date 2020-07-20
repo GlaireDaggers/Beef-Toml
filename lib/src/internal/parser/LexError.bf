@@ -29,7 +29,10 @@ namespace JetFistGames.Toml
 
 		public override void ToString(String strBuffer)
 		{
-			strBuffer.AppendF("{0} (line {1})", Message, Line + 1);
+			if (Line == -1)
+				strBuffer.AppendF("{0}", Message);
+			else
+				strBuffer.AppendF("{0} (line {1})", Message, Line + 1);
 		}
 	}
 }
