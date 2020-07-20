@@ -70,6 +70,8 @@ namespace JetFistGames.Toml
 		{
 			return .Err;
 		}
+
+		public abstract Object ToObject();
 	}
 
 	public class TomlTableNode : TomlNode
@@ -133,6 +135,14 @@ namespace JetFistGames.Toml
 		{
 			Children.Add(new String(name), child);
 		}
+
+		public override Object ToObject()
+		{
+			var dict = new Dictionary<String, Object>((int32) Children.Count);
+			for (var key in Children.Keys)
+				dict[new String(key)] = Children[key].ToObject();
+			return dict;
+		}
 	}
 
 	public class TomlArrayNode : TomlNode
@@ -186,6 +196,14 @@ namespace JetFistGames.Toml
 
 				return null;
 			}
+		}
+
+		public override Object ToObject()
+		{
+			var list = new List<Object>(Children.Count);
+			for (var child in Children)
+				list.Add(child);
+			return list;
 		}
 	}
 
@@ -371,6 +389,25 @@ namespace JetFistGames.Toml
 		{
 			if(ValueType != .String) return .Err;
 			return _stringValue;
+		}
+
+		public override Object ToObject()
+		{
+			switch (ValueType)
+			{
+			case .String:
+				return new String(_stringValue);
+			case .Integer:
+				return _intValue;
+			case .Float:
+				return _floatValue;
+			case .Bool:
+				return _boolValue;
+			case .Datetime:
+				return new box _dtValue;
+			default:
+				return null;
+			}
 		}
 	}
 }
